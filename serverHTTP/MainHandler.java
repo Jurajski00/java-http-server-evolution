@@ -1,6 +1,7 @@
 package serverHTTP;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -10,6 +11,9 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
 public class MainHandler implements HttpHandler {
+    private static final String WEB_ROOT = "web";
+    private static final int BUFFER_SIZE = 8192;
+
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         String path = exchange.getRequestURI().getPath();
@@ -18,18 +22,22 @@ public class MainHandler implements HttpHandler {
             path = "/index.html";
         }
 
-        Path filePath = Paths.get("web", path);
+        Path filePath = Paths.get(WEB_ROOT, path);
 
         if (Files.exists(filePath) && !Files.isDirectory(filePath)) {
-            byte[] fileContent = Files.readAllBytes(filePath);
-
             String contentType = determineContentType(path);
+            long fileSize = Files.size(filePath);
 
             exchange.getResponseHeaders().set("Content-type", contentType);
-            exchange.sendResponseHeaders(200, fileContent.length);
+            exchange.sendResponseHeaders(200, fileSize);
 
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(fileContent);
+            try (InputStream input = Files.newInputStream(filePath);
+            OutputStream output = exchange.getResponseBody()) {
+                byte[] buffer = new byte[BUFFER_SIZE];
+                int bytesRead;
+                while ((bytesRead = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, bytesRead);
+                }
             }
         } else {
             byte[] errorMessage = "Error 404: File not found!".getBytes(StandardCharsets.UTF_8);
